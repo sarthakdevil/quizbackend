@@ -11,7 +11,10 @@ import os
 import json
 import aiofiles
 from pymongo import MongoClient
+from langchain_groq import ChatGroq
+from dotenv import load_dotenv
 
+load_dotenv()
 app = FastAPI()
 
 # MongoDB configuration
@@ -23,12 +26,15 @@ questions_collection = db["questions"]  # Replace with your collection name
 login(token="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")
 
 def load_llm():
-    llm = CTransformers(
-        model="TheBloke/Mistral-7B-Instruct-v0.2-GGUF",
-        model_type="mistral",
-        max_new_tokens=1024,
-        temperature=0.3
+    llm = ChatGroq(
+        model="mixtral-8x7b-32768",
+        temperature=0.3,
+        max_tokens=1024,
+        timeout=None,
+        max_retries=2,
     )
+
+
     return llm
 
 def file_processing(file_path):
