@@ -13,7 +13,7 @@ import aiofiles
 from pymongo import MongoClient
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv
-
+from bson import ObjectId
 load_dotenv()
 app = FastAPI()
 
@@ -150,14 +150,15 @@ def get_json(file_path, pdf_name, num_ques):
             "questions_and_answers": questions_and_answers
         }
 
-        # Insert the document into MongoDB
-        questions_collection.insert_one(questions_dict)
+        # Insert the document into MongoDB and get the inserted_id
+        result = questions_collection.insert_one(questions_dict)
+        inserted_id = result.inserted_id  # Get the _id of the inserted document
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error writing to MongoDB: {str(e)}")
 
-    # Return a success message
-    return {"msg": "Generated successfully and saved to MongoDB."}
+    # Return a success message with the inserted _id
+    return {"msg": "Generated successfully and saved to MongoDB.", "inserted_id": str(inserted_id)}
 
 @app.post("/analyze")
 async def analyze_file(request: Request, pdf_filename: str = Form(...), num_ques: str = Form(...)):
@@ -167,7 +168,23 @@ async def analyze_file(request: Request, pdf_filename: str = Form(...), num_ques
     try:
         # Pass the number of questions to get_json
         output_message = get_json(pdf_filename, os.path.basename(pdf_filename), num_ques)
-        return JSONResponse(content=output_message)
+        
+        # Fetch the questions from MongoDB using the inserted _id
+        inserted_id = output_message.get("inserted_id")  # Get the _id from the output message
+        print(inserted_id)
+        questions_data = questions_collection.find_one({"_id": ObjectId(inserted_id)})  # Query for the document
+        
+        if not questions_data:
+            raise HTTPException(status_code=404, detail="Questions not found in the database.")
+        
+        # Prepare the response data
+        response_data = {
+            "pdf_name": questions_data.get("pdf_name"),
+            "questions_and_answers": questions_data.get("questions_and_answers")
+        }
+        
+        return JSONResponse(content=response_data)
+
     except HTTPException as e:
         raise e
     except Exception as e:
