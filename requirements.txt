@@ -7,3 +7,5 @@ aiofiles
 setuptools
 uvicorn
 langchain-community
+python-multipart
+bson
