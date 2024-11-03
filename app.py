@@ -19,8 +19,8 @@ app = FastAPI()
 
 # MongoDB configuration
 mongo_client = MongoClient("mongodb://localhost:27017/")
-db = mongo_client["question_db"]  # Replace with your database name
-questions_collection = db["questions"]  # Replace with your collection name
+db = mongo_client["question_db"]
+questions_collection = db["questions"]
 
 # Login to Hugging Face
 login(token="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")
@@ -33,36 +33,32 @@ def load_llm():
         timeout=None,
         max_retries=2,
     )
-
-
     return llm
 
 def file_processing(file_path):
-    # Load data from PDF
     loader = PyPDFLoader(file_path)
     data = loader.load()
 
-    question_gen = ''
+    content = ''
     for page in data:
-        question_gen += page.page_content
+        content += page.page_content
 
-    splitter_ques_gen = RecursiveCharacterTextSplitter(
+    splitter = RecursiveCharacterTextSplitter(
         chunk_size=500,
         chunk_overlap=50
     )
 
-    chunks_ques_gen = splitter_ques_gen.split_text(question_gen)
-    document_ques_gen = [Document(page_content=t) for t in chunks_ques_gen]
+    chunks = splitter.split_text(content)
+    documents = [Document(page_content=t) for t in chunks]
 
-    return document_ques_gen
-
+    return documents
 def llm_pipeline(file_path):
-    document_ques_gen = file_processing(file_path)
-    llm_ques_gen_pipeline = load_llm()
+    documents = file_processing(file_path)
+    llm_pipeline = load_llm()
 
     prompt_template = """
     You are an expert at creating questions with single-word answers based on documentation.
-    Your goal is to prepare a student their exam and coding tests.
+    Your goal is to prepare a student for their exam and coding tests.
     You do this by asking questions about the text below, ensuring each question can be answered with one word:
 
     ------------ 
@@ -72,24 +68,24 @@ def llm_pipeline(file_path):
     Please create questions that can be answered with only one word.
     Focus on extracting key terms or specific information where a single word is sufficient.
 
-    QUESTIONS:
+    QUESTIONS AND ANSWERS:
     """
 
     PROMPT_QUESTIONS = PromptTemplate(template=prompt_template, input_variables=["text"])
 
     refine_template = """
-You are an expert at generating comprehensive practice questions based on context.
-Your goal is to assist a student in preparing for a test by creating single-word answer questions from various topics.
-We have received practice questions to a certain extent: {existing_answer}.
-Refine these questions so they can be answered with one word if possible, or add new concise questions that touch on different areas of the content.
+    You are an expert at generating comprehensive practice questions based on context.
+    Your goal is to assist a student in preparing for a test by creating single-word answer questions from various topics.
+    We have received practice questions to a certain extent: {existing_answer}.
+    Refine these questions so they can be answered with one word if possible, or add new concise questions that touch on different areas of the content.
 
------------- 
-{text} 
------------- 
+    ------------ 
+    {text} 
+    ------------ 
 
-Ensure each question has a one-word answer. Aim to create at least 5 additional questions based on the content, exploring different topics or perspectives.
-QUESTIONS:
-"""
+    Ensure each question has a one-word answer. Aim to create at least 5 additional questions based on the content, exploring different topics or perspectives.
+    QUESTIONS AND ANSWERS:
+    """
 
     REFINE_PROMPT_QUESTIONS = PromptTemplate(
         input_variables=["existing_answer", "text"],
@@ -97,20 +93,49 @@ QUESTIONS:
     )
 
     ques_gen_chain = load_summarize_chain(
-        llm=llm_ques_gen_pipeline,
+        llm=llm_pipeline,
         chain_type="refine",
         verbose=True,
         question_prompt=PROMPT_QUESTIONS,
         refine_prompt=REFINE_PROMPT_QUESTIONS
     )
 
-    ques = ques_gen_chain.run(document_ques_gen)
+    # Run the chain to get output
+    output = ques_gen_chain.run(documents)
 
-    # Split and filter the generated questions
-    ques_list = ques.split("\n")
-    filtered_ques_list = [element for element in ques_list if element.endswith('?') or element.endswith('.')]
+    # Split output based on newline characters
+    output_lines = output.split("\n")
+    
+    questions_and_answers = []
+    current_question = None
 
-    return filtered_ques_list
+    for line in output_lines:
+        stripped_line = line.strip()
+        if stripped_line:  # Only process non-empty lines
+            if current_question is None:
+                current_question = stripped_line  # The line is a question
+            else:
+                # Create a structured format for question and answer
+                questions_and_answers.append({
+                    "question": current_question,  # Assign the last question here
+                    "answer": stripped_line  # The current line is the answer
+                })
+                current_question = None  # Reset for the next question
+
+    # Adjust the format as per your requirement to remove any unnecessary information
+    formatted_output = [
+        {
+            "question": qa["question"].replace("Answer:", "").strip(),  # Clean up question
+            "answer": qa["answer"].replace("Answer:", "").strip()  # Clean up answer
+        }
+        for qa in questions_and_answers if qa["question"] and qa["answer"]
+    ]
+
+    return {
+        "pdf_name": "ACM.pdf",
+        "questions_and_answers": formatted_output
+    }
+
 
 @app.post("/upload")
 async def upload_pdf(request: Request, pdf_file: bytes = File(...), filename: str = Form(...)):
@@ -125,53 +150,39 @@ async def upload_pdf(request: Request, pdf_file: bytes = File(...), filename: st
     response_data = {"msg": 'success', "pdf_filename": pdf_filename}
     return JSONResponse(content=response_data)
 
-def get_json(file_path,pdf_name):
-    base_folder = 'output/'
-    if not os.path.isdir(base_folder):
-        os.makedirs(base_folder)  
-    output_file = os.path.join(base_folder, "questions.json")
-
-    questions_list = []
+def get_json(file_path, pdf_name):
+    # Create a base folder for output if it doesn't exist
+    # base_folder = 'output/'
+    # if not os.path.isdir(base_folder):
+    #     os.makedirs(base_folder)  
+    # output_file = os.path.join(base_folder, "questions.json")
 
     try:
-        # Get the list of questions from the pipeline
-        pipeline_result = llm_pipeline(file_path)
-        
-        # If multiple values are returned, process them accordingly
-        if isinstance(pipeline_result, tuple):
-            questions_list = pipeline_result[1] if len(pipeline_result) > 1 else []
-        else:
-            questions_list = pipeline_result if isinstance(pipeline_result, list) else []
-
-        if not questions_list:
-            raise ValueError("No questions generated.")
+        # Generate questions and answers using the llm_pipeline
+        questions_and_answers = llm_pipeline(file_path)
+        if not questions_and_answers:
+            raise ValueError("No questions and answers generated.")
             
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error in generating questions: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error in generating questions and answers: {str(e)}")
 
-    # Save the questions to the MongoDB collection
     try:
-        # Convert the list to a dictionary
+        # Prepare the document for MongoDB
         questions_dict = {
             "pdf_name": pdf_name,
-            "questions": {f"question{i+1}": question for i, question in enumerate(questions_list)}
+            "questions_and_answers": questions_and_answers
         }
 
-        
-        # Insert the questions dictionary into the MongoDB collection
+        # Insert the document into MongoDB
         questions_collection.insert_one(questions_dict)
-
-        # Optionally save to a JSON file in the required format
-        with open(output_file, "w", encoding="utf-8") as jsonfile:
-            json.dump(questions_dict, jsonfile, ensure_ascii=False, indent=4)
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error writing to MongoDB: {str(e)}")
 
-    return output_file
-
+    # Return a success message
+    return {"msg": "Generated successfully and saved to MongoDB."}
 @app.post("/analyze")
-async def analyze_file(request: Request, pdf_filename: str = Form(...)):
+async def analyze_file(request: Request, pdf_filename: str = Form(...),num_ques:str):
     if not os.path.exists(pdf_filename):
         raise HTTPException(status_code=404, detail="PDF file not found")
 
