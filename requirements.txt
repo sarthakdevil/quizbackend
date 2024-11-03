@@ -5,3 +5,5 @@ pymongo
 langchain_groq
 aiofiles
 setuptools
+uvicorn
+gunicorn
