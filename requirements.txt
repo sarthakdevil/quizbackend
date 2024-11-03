@@ -8,4 +8,3 @@ setuptools
 uvicorn
 langchain-community
 python-multipart
-bson
