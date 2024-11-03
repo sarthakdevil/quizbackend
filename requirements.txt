@@ -5,3 +5,4 @@ pymongo
 dotenv
 langchain_groq
 aiofiles
+pip == 24.3.1
