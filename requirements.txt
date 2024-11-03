@@ -1,0 +1,7 @@
+fastapi
+langchain
+huggingface_hub
+pymongo
+dotenv
+langchain_groq
+aiofiles

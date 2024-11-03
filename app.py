@@ -1,14 +1,13 @@
-from fastapi import FastAPI, Form, Request, Response, File, HTTPException
+from fastapi import FastAPI, Form, Request, File, HTTPException
 from fastapi.responses import JSONResponse
-from langchain.llms import CTransformers
 from langchain.chains.summarize import load_summarize_chain
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.docstore.document import Document
 from langchain.document_loaders import PyPDFLoader
 from langchain.prompts import PromptTemplate
 from huggingface_hub import login
+from fastapi.middleware.cors import CORSMiddleware
 import os
-import json
 import aiofiles
 from pymongo import MongoClient
 from langchain_groq import ChatGroq
@@ -16,6 +15,15 @@ from dotenv import load_dotenv
 from bson import ObjectId
 load_dotenv()
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # MongoDB configuration
 mongo_client = MongoClient("mongodb://localhost:27017/")
@@ -117,7 +125,7 @@ def llm_pipeline(file_path, num_ques):
             questions_and_answers.append({"question": question, "answer": answer})
 
     return {
-        "pdf_name": "ACM.pdf",
+        "pdf_name": file_path,
         "questions_and_answers": questions_and_answers
     }
 
@@ -162,6 +170,7 @@ def get_json(file_path, pdf_name, num_ques):
 
 @app.post("/analyze")
 async def analyze_file(request: Request, pdf_filename: str = Form(...), num_ques: str = Form(...)):
+    pdf_filename = f"docs/{pdf_filename}"
     if not os.path.exists(pdf_filename):
         raise HTTPException(status_code=404, detail="PDF file not found")
 
@@ -179,7 +188,7 @@ async def analyze_file(request: Request, pdf_filename: str = Form(...), num_ques
         
         # Prepare the response data
         response_data = {
-            "pdf_name": questions_data.get("pdf_name"),
+            "pdf_name": pdf_filename,
             "questions_and_answers": questions_data.get("questions_and_answers")
         }
         
