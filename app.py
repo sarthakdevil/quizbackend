@@ -52,20 +52,21 @@ def file_processing(file_path):
     documents = [Document(page_content=t) for t in chunks]
 
     return documents
-def llm_pipeline(file_path):
+
+def llm_pipeline(file_path, num_ques):
     documents = file_processing(file_path)
     llm_pipeline = load_llm()
 
-    prompt_template = """
+    prompt_template = f"""
     You are an expert at creating questions with single-word answers based on documentation.
     Your goal is to prepare a student for their exam and coding tests.
-    You do this by asking questions about the text below, ensuring each question can be answered with one word:
+    You do this by asking questions about the text below, ensuring each question can be answered with one word only and no extra then one work is required to answer any question:
 
     ------------ 
-    {text} 
+    {{text}} 
     ------------ 
 
-    Please create questions that can be answered with only one word.
+    Please create {num_ques} questions that can be answered with only one word.
     Focus on extracting key terms or specific information where a single word is sufficient.
 
     QUESTIONS AND ANSWERS:
@@ -73,17 +74,19 @@ def llm_pipeline(file_path):
 
     PROMPT_QUESTIONS = PromptTemplate(template=prompt_template, input_variables=["text"])
 
-    refine_template = """
+    refine_template = f"""
     You are an expert at generating comprehensive practice questions based on context.
     Your goal is to assist a student in preparing for a test by creating single-word answer questions from various topics.
-    We have received practice questions to a certain extent: {existing_answer}.
-    Refine these questions so they can be answered with one word if possible, or add new concise questions that touch on different areas of the content.
+    We have received practice questions to a certain extent: {{existing_answer}}.
+    Refine these questions so they can be answered with one word if number of questions are less than {num_ques} add new concise questions that touch on different areas of the content.
+    
+    Please create exactly {num_ques} questions based on the content, ensuring each question has a one-word answer.
 
     ------------ 
-    {text} 
+    {{text}} 
     ------------ 
 
-    Ensure each question has a one-word answer. Aim to create at least 5 additional questions based on the content, exploring different topics or perspectives.
+    Ensure each question has a one-word answer.
     QUESTIONS AND ANSWERS:
     """
 
@@ -103,39 +106,20 @@ def llm_pipeline(file_path):
     # Run the chain to get output
     output = ques_gen_chain.run(documents)
 
-    # Split output based on newline characters
-    output_lines = output.split("\n")
-    
+    # Split the output based on new lines and process questions and answers
+    qa_pairs = output.split("\n")
     questions_and_answers = []
-    current_question = None
-
-    for line in output_lines:
-        stripped_line = line.strip()
-        if stripped_line:  # Only process non-empty lines
-            if current_question is None:
-                current_question = stripped_line  # The line is a question
-            else:
-                # Create a structured format for question and answer
-                questions_and_answers.append({
-                    "question": current_question,  # Assign the last question here
-                    "answer": stripped_line  # The current line is the answer
-                })
-                current_question = None  # Reset for the next question
-
-    # Adjust the format as per your requirement to remove any unnecessary information
-    formatted_output = [
-        {
-            "question": qa["question"].replace("Answer:", "").strip(),  # Clean up question
-            "answer": qa["answer"].replace("Answer:", "").strip()  # Clean up answer
-        }
-        for qa in questions_and_answers if qa["question"] and qa["answer"]
-    ]
+    
+    for i in range(len(qa_pairs)):
+        if "?" in qa_pairs[i]:  # Check if it's a question
+            question = qa_pairs[i].strip()
+            answer = qa_pairs[i + 1].strip() if (i + 1) < len(qa_pairs) else ""
+            questions_and_answers.append({"question": question, "answer": answer})
 
     return {
         "pdf_name": "ACM.pdf",
-        "questions_and_answers": formatted_output
+        "questions_and_answers": questions_and_answers
     }
-
 
 @app.post("/upload")
 async def upload_pdf(request: Request, pdf_file: bytes = File(...), filename: str = Form(...)):
@@ -150,16 +134,10 @@ async def upload_pdf(request: Request, pdf_file: bytes = File(...), filename: st
     response_data = {"msg": 'success', "pdf_filename": pdf_filename}
     return JSONResponse(content=response_data)
 
-def get_json(file_path, pdf_name):
-    # Create a base folder for output if it doesn't exist
-    # base_folder = 'output/'
-    # if not os.path.isdir(base_folder):
-    #     os.makedirs(base_folder)  
-    # output_file = os.path.join(base_folder, "questions.json")
-
+def get_json(file_path, pdf_name, num_ques):
     try:
-        # Generate questions and answers using the llm_pipeline
-        questions_and_answers = llm_pipeline(file_path)
+        # Generate questions and answers using the llm_pipeline with num_ques
+        questions_and_answers = llm_pipeline(file_path, num_ques)
         if not questions_and_answers:
             raise ValueError("No questions and answers generated.")
             
@@ -167,7 +145,6 @@ def get_json(file_path, pdf_name):
         raise HTTPException(status_code=500, detail=f"Error in generating questions and answers: {str(e)}")
 
     try:
-        # Prepare the document for MongoDB
         questions_dict = {
             "pdf_name": pdf_name,
             "questions_and_answers": questions_and_answers
@@ -181,15 +158,16 @@ def get_json(file_path, pdf_name):
 
     # Return a success message
     return {"msg": "Generated successfully and saved to MongoDB."}
+
 @app.post("/analyze")
-async def analyze_file(request: Request, pdf_filename: str = Form(...),num_ques:str):
+async def analyze_file(request: Request, pdf_filename: str = Form(...), num_ques: str = Form(...)):
     if not os.path.exists(pdf_filename):
         raise HTTPException(status_code=404, detail="PDF file not found")
 
     try:
-        output_file = get_json(pdf_filename, os.path.basename(pdf_filename))
-        response_data = {"output_file": output_file}
-        return JSONResponse(content=response_data)
+        # Pass the number of questions to get_json
+        output_message = get_json(pdf_filename, os.path.basename(pdf_filename), num_ques)
+        return JSONResponse(content=output_message)
     except HTTPException as e:
         raise e
     except Exception as e:
