@@ -13,8 +13,13 @@ from pymongo import MongoClient
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv
 from bson import ObjectId
+from typing import Optional
+import logging
 load_dotenv()
 app = FastAPI()
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app.add_middleware(
     CORSMiddleware,
@@ -141,27 +146,32 @@ async def upload_pdf(request: Request, pdf_file: bytes = File(...), filename: st
 
     response_data = {"msg": 'success', "pdf_filename": pdf_filename}
     return JSONResponse(content=response_data)
-
-def get_json(file_path, pdf_name, num_ques):
+def get_json(file_path, pdf_name, quiz_name, num_ques, time):
     try:
         # Generate questions and answers using the llm_pipeline with num_ques
         questions_and_answers = llm_pipeline(file_path, num_ques)
         if not questions_and_answers:
             raise ValueError("No questions and answers generated.")
-            
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error in generating questions and answers: {str(e)}")
 
     try:
+        if time is not None:
+            try:
+                time = int(time)  # Convert time to integer
+            except ValueError:
+                raise ValueError("Invalid time format. Please provide a valid number.")
+        # Use a default message if time is None
         questions_dict = {
             "pdf_name": pdf_name,
-            "questions_and_answers": questions_and_answers
+            "quiz_name": quiz_name,
+            "questions_and_answers": questions_and_answers,
+            "quiz_time": time if time is not None else "No time specified"
         }
 
         # Insert the document into MongoDB and get the inserted_id
         result = questions_collection.insert_one(questions_dict)
         inserted_id = result.inserted_id  # Get the _id of the inserted document
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error writing to MongoDB: {str(e)}")
 
@@ -169,36 +179,51 @@ def get_json(file_path, pdf_name, num_ques):
     return {"msg": "Generated successfully and saved to MongoDB.", "inserted_id": str(inserted_id)}
 
 @app.post("/analyze")
-async def analyze_file(request: Request, pdf_filename: str = Form(...), num_ques: str = Form(...)):
-    pdf_filename = f"docs/{pdf_filename}"
-    if not os.path.exists(pdf_filename):
+async def analyze_file(
+    request: Request,
+    pdf_filename: str = Form(...),
+    quiz_name: str = Form(...),  # New field for quiz name
+    num_ques: str = Form(...),
+    time: Optional[str] = Form(None)
+):
+    # Construct the file path
+    pdf_filepath = f"docs/{pdf_filename}"
+    logger.info(f"Received PDF filename for analysis: {pdf_filename}")
+    # Check if the PDF file exists
+    if not os.path.exists(pdf_filepath):
         raise HTTPException(status_code=404, detail="PDF file not found")
 
     try:
-        # Pass the number of questions to get_json
-        output_message = get_json(pdf_filename, os.path.basename(pdf_filename), num_ques)
+        # Pass parameters to get_json, including optional `time`
+        output_message = get_json(pdf_filepath, os.path.basename(pdf_filename), quiz_name, num_ques, time)
         
-        # Fetch the questions from MongoDB using the inserted _id
-        inserted_id = output_message.get("inserted_id")  # Get the _id from the output message
-        print(inserted_id)
-        questions_data = questions_collection.find_one({"_id": ObjectId(inserted_id)})  # Query for the document
+        # Get the inserted MongoDB document ID
+        inserted_id = output_message.get("inserted_id")
+        
+        # Retrieve the document from MongoDB by ID
+        questions_data = questions_collection.find_one({"_id": ObjectId(inserted_id)})
         
         if not questions_data:
             raise HTTPException(status_code=404, detail="Questions not found in the database.")
         
-        # Prepare the response data
+        # Prepare the response data, including `quiz_time` and `quiz_name` fields
         response_data = {
             "pdf_name": pdf_filename,
-            "questions_and_answers": questions_data.get("questions_and_answers")
+            "quiz_name": questions_data.get("quiz_name", "Untitled Quiz"),
+            "questions_and_answers": questions_data.get("questions_and_answers"),
+            "quiz_time": questions_data.get("quiz_time", "No time specified")  # Default if time is None
         }
         
+        # Return the response as JSON
         return JSONResponse(content=response_data)
 
     except HTTPException as e:
+        # Raise HTTP errors as is for specific handling
         raise e
     except Exception as e:
+        # Handle any other unexpected exceptions
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app:app", host='127.0.0.1', port=8000, reload=True)
+    uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=True)
