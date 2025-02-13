@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://quizbackend-dcfl.onrender.com"],
+    allow_origins=["https://a-iquizapp.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
