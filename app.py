@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://a-iquizapp.vercel.app"],
+    allow_origins=["https://a-iquizapp.vercel.app","http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
