@@ -31,7 +31,7 @@ app.add_middleware(
 
 
 # MongoDB configuration
-mongo_client = MongoClient("mongodb+srv://sarthakrajesh2005:<db_password>@cluster0.lvcrr.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+mongo_client = MongoClient("mongodb+srv://sarthakrajesh2005:Sarthak123@cluster0.lvcrr.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 db = mongo_client["question_db"]
 questions_collection = db["questions"]
 
