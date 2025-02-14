@@ -8,3 +8,5 @@ setuptools
 uvicorn
 langchain-community
 python-multipart
+pypdf
+pypdf2
