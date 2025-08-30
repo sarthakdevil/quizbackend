@@ -1,0 +1,36 @@
+{
+    "pdf_name": "ACM.pdf",
+    "questions_and_answers": {
+        "pdf_name": "ACM.pdf",
+        "questions_and_answers": [
+            {
+                "question": "1. What is the format of the event?",
+                "answer": "seminar"
+            },
+            {
+                "question": "2. What is the anticipated attendance?",
+                "answer": "100"
+            },
+            {
+                "question": "3. What are the technical requirements for the offline day?",
+                "answer": "projector"
+            },
+            {
+                "question": "4. What supplementary equipment is needed?",
+                "answer": "screen"
+            },
+            {
+                "question": "5. Who is the primary target of this event?",
+                "answer": "students"
+            },
+            {
+                "question": "6. What is the proposed date of the event?",
+                "answer": "23rdDecember"
+            },
+            {
+                "question": "7. Where will the event take place?",
+                "answer": "hall"
+            }
+        ]
+    },
+    "_id": 

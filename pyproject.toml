@@ -1,0 +1,20 @@
+[project]
+name = "quizbackend"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "aiofiles>=24.1.0",
+    "fastapi>=0.116.1",
+    "huggingface-hub>=0.34.4",
+    "langchain>=0.3.27",
+    "langchain-community>=0.3.29",
+    "langchain-groq>=0.3.7",
+    "pymongo>=4.14.1",
+    "pypdf>=6.0.0",
+    "pypdf2>=3.0.1",
+    "python-multipart>=0.0.20",
+    "setuptools>=80.9.0",
+    "uvicorn>=0.35.0",
+]
