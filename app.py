@@ -5,7 +5,6 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.docstore.document import Document
 from langchain.document_loaders import PyPDFLoader
 from langchain.prompts import PromptTemplate
-from huggingface_hub import login
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import aiofiles
@@ -34,9 +33,6 @@ app.add_middleware(
 mongo_client = MongoClient("mongodb+srv://sarthakrajesh2005:Sarthak123@cluster0.lvcrr.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 db = mongo_client["question_db"]
 questions_collection = db["questions"]
-
-# Login to Hugging Face
-login(token="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")
 
 def load_llm():
     llm = ChatGoogleGenerativeAI(
