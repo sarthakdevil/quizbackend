@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 import aiofiles
 from pymongo import MongoClient
-from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv
 from bson import ObjectId
 from typing import Optional
@@ -39,8 +39,8 @@ questions_collection = db["questions"]
 login(token="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")
 
 def load_llm():
-    llm = ChatGroq(
-        model="mixtral-8x7b-32768",
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.0-flash",
         temperature=0.3,
         max_tokens=1024,
         timeout=None,
