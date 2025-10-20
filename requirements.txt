@@ -10,3 +10,4 @@ langchain-community
 python-multipart
 pypdf
 pypdf2
+APScheduler
